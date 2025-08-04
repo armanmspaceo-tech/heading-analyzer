@@ -253,9 +253,13 @@
                     id="urlInput" 
                     class="url-input" 
                     placeholder="Enter URL to analyze (e.g., https://example.com)"
-                    value="https://www.oloid.com/blog/building-user-trust-and-adoption-for-passwordless-authentication"
+                    value=""
                 >
                 <button id="analyzeBtn" class="analyze-btn">Analyze</button>
+            </div>
+            <div style="margin-top: 15px; padding: 15px; background: #e8f4f8; border-radius: 8px; font-size: 14px; color: #2c5aa0;">
+                <strong>Note:</strong> Some websites may block external analysis due to CORS restrictions. 
+                If analysis fails, try different URLs or use the manual inspection guide that will be provided.
             </div>
         </div>
 
@@ -340,46 +344,69 @@
             }
 
             async fetchAndAnalyzeDirectly(url) {
+                // Replace with your deployed Vercel API URL
+                const API_URL = 'https://your-project-name.vercel.app/api/analyze';
+                
                 try {
-                    // Use a CORS proxy to fetch the webpage content
-                    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-                    const response = await fetch(proxyUrl);
+                    console.log('Sending request to backend API...');
                     
+                    const response = await fetch(API_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ url: url })
+                    });
+
                     if (!response.ok) {
-                        throw new Error(`Failed to fetch: ${response.status}`);
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || `HTTP ${response.status}`);
                     }
-                    
+
                     const data = await response.json();
-                    const htmlContent = data.contents;
                     
-                    // Parse the HTML and extract headings
-                    const parser = new DOMParser();
-                    const doc = parser.parseFromString(htmlContent, 'text/html');
-                    
-                    // Extract all heading elements
-                    const headingElements = doc.querySelectorAll('h1, h2, h3, h4, h5, h6');
-                    const headings = Array.from(headingElements).map(el => ({
-                        level: parseInt(el.tagName.charAt(1)),
-                        text: el.textContent.trim()
-                    }));
-                    
-                    // Analyze issues
-                    const issues = this.analyzeHeadingIssues(headings);
-                    
-                    // Generate suggestions
-                    const suggestions = this.generateSuggestions(headings);
-                    
+                    if (!data.success) {
+                        throw new Error(data.error || 'Analysis failed');
+                    }
+
                     return {
-                        headings,
-                        issues,
-                        suggestions
+                        headings: data.headings || [],
+                        issues: data.issues || [],
+                        suggestions: data.suggestions || []
                     };
-                    
+
                 } catch (error) {
-                    // Fallback if CORS proxy fails
-                    console.error('Failed to fetch content:', error);
-                    throw new Error('Unable to fetch webpage content. The site may block external access or have CORS restrictions.');
+                    console.error('Backend API failed:', error);
+                    
+                    // Fallback to manual instructions
+                    return this.getDemoAnalysis(url, error.message);
                 }
+            }
+
+            getDemoAnalysis(url, errorMessage) {
+                return {
+                    headings: [
+                        {level: 1, text: "Analysis Failed - Backend Error"},
+                        {level: 2, text: `Error: ${errorMessage}`},
+                        {level: 2, text: "Manual Analysis Instructions:"},
+                        {level: 3, text: "1. Press F12 to open developer tools"},
+                        {level: 3, text: "2. Go to Elements tab"},
+                        {level: 3, text: "3. Press Ctrl+F and search for 'h1'"},
+                        {level: 3, text: "4. Check each heading level (h1, h2, h3, etc.)"},
+                        {level: 3, text: "5. Verify proper hierarchy"}
+                    ],
+                    issues: [
+                        "Backend API is not accessible",
+                        "This could be due to network issues or API limits",
+                        "Use manual inspection as described above"
+                    ],
+                    suggestions: [
+                        {level: 1, text: "Setup Backend API"},
+                        {level: 2, text: "Deploy the backend API to Vercel"},
+                        {level: 2, text: "Update API_URL in frontend code"},
+                        {level: 2, text: "Test with simple URLs first"}
+                    ]
+                };
             }
 
             analyzeHeadingIssues(headings) {
