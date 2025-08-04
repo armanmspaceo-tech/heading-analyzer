@@ -340,51 +340,120 @@
             }
 
             async fetchAndAnalyzeDirectly(url) {
-                // Since we can't directly fetch due to CORS, we'll create a mock analysis
-                // In a real implementation, this would need a backend service
-                
-                // For demonstration, let's create a comprehensive analysis
-                const mockAnalysis = {
-                    headings: [
-                        {level: 1, text: "Building User Trust and Adoption for Passwordless Authentication"},
-                        {level: 2, text: "Embracing the New: Building User Trust in Passwordless Authentication"},
-                        {level: 2, text: "The Need for Passwordless Authentication"},
-                        {level: 2, text: "Steps to Increase User Adoption"},
-                        {level: 2, text: "Building Trust in Passwordless Authentication"},
-                        {level: 2, text: "Conclusion"},
-                        {level: 2, text: "FAQs"}
-                    ],
-                    issues: [
-                        "Sections appear styled as headings but may not use proper HTML heading tags",
-                        "Missing H3 tags for subsections under 'Steps to Increase User Adoption'",
-                        "FAQ questions could be individual H3 headings for better navigation"
-                    ],
-                    suggestions: [
-                        {level: 1, text: "Building User Trust and Adoption for Passwordless Authentication"},
-                        {level: 2, text: "Embracing the New: Building User Trust in Passwordless Authentication"},
-                        {level: 2, text: "The Need for Passwordless Authentication"},
-                        {level: 2, text: "Steps to Increase User Adoption"},
-                        {level: 3, text: "Education and Awareness"},
-                        {level: 3, text: "Transparency"},
-                        {level: 3, text: "User-Friendly Design"},
-                        {level: 3, text: "Accessibility"},
-                        {level: 3, text: "Incentives and Encouragement"},
-                        {level: 3, text: "Support and Assistance"},
-                        {level: 3, text: "Gradual Implementation"},
-                        {level: 2, text: "Building Trust in Passwordless Authentication"},
-                        {level: 3, text: "Highlight Security Benefits"},
-                        {level: 3, text: "Ensure Robust Security Measures"},
-                        {level: 3, text: "Positive User Experiences"},
-                        {level: 2, text: "Conclusion"},
-                        {level: 2, text: "FAQs"},
-                        {level: 3, text: "Is passwordless authentication more secure than passwords?"},
-                        {level: 3, text: "What are some common concerns users have?"},
-                        {level: 3, text: "Will passwordless authentication completely replace passwords?"},
-                        {level: 3, text: "How can businesses encourage user adoption?"}
-                    ]
-                };
+                try {
+                    // Use a CORS proxy to fetch the webpage content
+                    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+                    const response = await fetch(proxyUrl);
+                    
+                    if (!response.ok) {
+                        throw new Error(`Failed to fetch: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    const htmlContent = data.contents;
+                    
+                    // Parse the HTML and extract headings
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(htmlContent, 'text/html');
+                    
+                    // Extract all heading elements
+                    const headingElements = doc.querySelectorAll('h1, h2, h3, h4, h5, h6');
+                    const headings = Array.from(headingElements).map(el => ({
+                        level: parseInt(el.tagName.charAt(1)),
+                        text: el.textContent.trim()
+                    }));
+                    
+                    // Analyze issues
+                    const issues = this.analyzeHeadingIssues(headings);
+                    
+                    // Generate suggestions
+                    const suggestions = this.generateSuggestions(headings);
+                    
+                    return {
+                        headings,
+                        issues,
+                        suggestions
+                    };
+                    
+                } catch (error) {
+                    // Fallback if CORS proxy fails
+                    console.error('Failed to fetch content:', error);
+                    throw new Error('Unable to fetch webpage content. The site may block external access or have CORS restrictions.');
+                }
+            }
 
-                return mockAnalysis;
+            analyzeHeadingIssues(headings) {
+                const issues = [];
+                
+                if (headings.length === 0) {
+                    issues.push("No heading tags found on the page");
+                    return issues;
+                }
+                
+                // Check for H1 issues
+                const h1Count = headings.filter(h => h.level === 1).length;
+                if (h1Count === 0) {
+                    issues.push("No H1 tag found - every page should have exactly one H1");
+                } else if (h1Count > 1) {
+                    issues.push(`Multiple H1 tags found (${h1Count}) - should have only one H1 per page`);
+                }
+                
+                // Check for skipped heading levels
+                for (let i = 1; i < headings.length; i++) {
+                    const current = headings[i];
+                    const previous = headings[i - 1];
+                    
+                    if (current.level > previous.level + 1) {
+                        issues.push(`Skipped heading level: H${previous.level} followed by H${current.level} (should use H${previous.level + 1})`);
+                    }
+                }
+                
+                // Check heading order
+                if (headings.length > 0 && headings[0].level !== 1) {
+                    issues.push("Page should start with an H1 heading");
+                }
+                
+                return issues;
+            }
+
+            generateSuggestions(headings) {
+                if (headings.length === 0) {
+                    return [
+                        {level: 1, text: "Add a main page title (H1)"},
+                        {level: 2, text: "Add section headings (H2)"},
+                        {level: 3, text: "Add subsection headings (H3) as needed"}
+                    ];
+                }
+                
+                const suggestions = [];
+                let currentLevel = 1;
+                
+                for (let i = 0; i < headings.length; i++) {
+                    const heading = headings[i];
+                    
+                    // Ensure proper hierarchy
+                    if (i === 0) {
+                        // First heading should be H1
+                        suggestions.push({
+                            level: 1,
+                            text: heading.text
+                        });
+                        currentLevel = 1;
+                    } else {
+                        // Maintain proper hierarchy
+                        const maxAllowedLevel = currentLevel + 1;
+                        const suggestedLevel = Math.min(heading.level, maxAllowedLevel);
+                        
+                        suggestions.push({
+                            level: suggestedLevel,
+                            text: heading.text
+                        });
+                        
+                        currentLevel = suggestedLevel;
+                    }
+                }
+                
+                return suggestions;
             }
 
             isValidUrl(string) {
